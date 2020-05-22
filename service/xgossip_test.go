@@ -58,6 +58,7 @@ func TestXGossip(t *testing.T) {
 			MinDelay: 100,
 			MaxDelay: 600,
 			UseSmart: true,
+			MaxWeight: 100,
 		}
 		gossipers[i] = servers[i].Service(Name).(*XGossip)
 		gossipers[i].SetConfig(c)

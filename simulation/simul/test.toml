@@ -1,0 +1,19 @@
+Simulation = "xgossip"
+Servers = 1
+Bf = 19
+Suite = "bn256.G2"
+CommunicationMode = 1
+GossipTime = 150
+GossipPeers = 4
+BlockSize = 10000000
+MaxRoundLoops = 3
+RoundsToSimulate = 50
+RoundTime = 10000
+DefaultDelay = 4000
+MinDelay = 1000
+MaxDelay = 7000
+UseSmart = true
+MaxWeight = 100
+
+Hosts
+20

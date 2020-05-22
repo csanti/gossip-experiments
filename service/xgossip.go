@@ -30,6 +30,7 @@ func NewXGossipService(c *onet.Context) (onet.Service, error) {
 	}
 	c.RegisterProcessor(g, WhisperType)
 	c.RegisterProcessor(g, ConfigType)
+	c.RegisterProcessor(g, AckType)
 	return g, nil
 }
 
@@ -53,9 +54,8 @@ func (g *XGossip) AttachCallback(fn func()) {
 	}
 }
 
-
 func (g *XGossip) Start() {
-	// send a bootstrap message
+	log.Lvl1("start")
 	if g.node != nil {
 		g.node.Start()
 	} else {
@@ -69,6 +69,8 @@ func (g *XGossip) Process(e *network.Envelope) {
 	case *Config:
 		g.SetConfig(inner)
 	case *Whisper:
+		g.node.Process(e)
+	case *Ack:
 		g.node.Process(e)
 	default:
 		log.Lvl1("Received unidentified message")

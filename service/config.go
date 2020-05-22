@@ -27,4 +27,5 @@ type Config struct {
 	MinDelay int
 	DefaultDelay int
 	UseSmart bool
+	MaxWeight int
 }

@@ -3,10 +3,10 @@ package service
 import (
 	"sync"
 	"time"
-	"math/rand"
 	"github.com/csanti/onet"
 	"github.com/csanti/onet/log"
 	"github.com/csanti/onet/network"
+	"github.com/csanti/onet/simul/monitor"
 )
 
 type Node struct {
@@ -27,6 +27,8 @@ type Node struct {
 	gossipSubset CommunicationFn
 	gossiped map[int]bool
 	simulatedRoundsCount int
+
+	finishedRound chan bool
 }
 
 func NewNodeProcess(c *onet.Context, conf *Config, b CommunicationFn, g CommunicationFn) *Node {
@@ -39,6 +41,7 @@ func NewNodeProcess(c *onet.Context, conf *Config, b CommunicationFn, g Communic
     	gossipSubset: g,
     	sessionStorage: NewSessionStorage(conf),
     	gossiped: make(map[int]bool),
+    	finishedRound: make(chan bool),
 	}
 	n.sessionStorage.InitPeerList()
 	return n
@@ -51,16 +54,29 @@ func (n *Node) AttachCallback(fn func()) {
 
 func (n *Node) Start() {
 	n.isBlockProposer = true
+	log.Lvl1(n.c.RoundsToSimulate)
 	go func() {
 		for i:=0;i<n.c.RoundsToSimulate;i++ {
 			log.Lvl1("Sending whisper ",i)
 			// create first whisper
 			packet := &Whisper{
+				SourceId: n.c.Index,
 				Round: i,
+				PeerId: n.c.Index,
+				Iteration: 1,
 			}
 			// send bootstrap message to all nodes
+			n.sessionStorage.SetInitialTimestamp(i, time.Now())
 			go n.gossip(packet)
-			time.Sleep(time.Duration(n.c.RoundTime) * time.Millisecond)
+			select {
+				case <-n.finishedRound:
+				case <-time.After(15000 * time.Millisecond):
+					log.Lvl1("round timeout")
+			}
+			//n.finishedRound<-false
+			log.Lvlf1("Round %d Finished - MaxDelay: %d - MaxIterations: %d",i,n.sessionStorage.MaxNodeDelay[i],n.sessionStorage.MaxNodeIterations[i])
+			monitor.RecordSingleMeasure("maxDelay", float64(n.sessionStorage.MaxNodeDelay[i]))
+			monitor.RecordSingleMeasure("maxIterations", float64(n.sessionStorage.MaxNodeIterations[i]))
 		}
 	}()
 
@@ -73,8 +89,16 @@ func (n *Node) Process(e *network.Envelope) {
 	switch inner := e.Msg.(type) {
 		case *Whisper:
 			n.ReceivedWhisper(inner)
+		case *Ack:
+			n.ReceivedAck(inner)
 		default:
 			log.Lvl2("Received unidentified message")
+	}
+}
+
+func (n *Node) ReceivedAck(a *Ack) {
+	if n.sessionStorage.ProcessAck(a) == n.c.N  {
+		n.finishedRound <- true
 	}
 }
 
@@ -82,22 +106,26 @@ func (n *Node) Process(e *network.Envelope) {
 func (n *Node) ReceivedWhisper(w *Whisper) {
 	log.Lvl3("Processing whisper message...")
 	if !n.gossiped[w.Round] {
-		log.Lvl1(n.c.Index)
-		n.callback()
+		received := time.Now()
+		if n.callback != nil {
+			n.callback()
+		}
+		ack := &Ack {
+			Timestamp: received.Format("2006-01-02 15:04:05.000000000 -0700 MS"),
+			Round: w.Round,
+			PeerId: n.c.Index,
+			MaxIteration: w.Iteration,
+		}
+
+		w.PeerId = n.c.Index
+		w.Iteration = w.Iteration + 1
 		go n.gossip(w)
 		n.gossiped[w.Round] = true
-		if n.c.UseSmart {
-			time.Sleep(time.Duration(5)*time.Second)
-			n.sessionStorage.ComputeWeights()
-		}
+
+		if err := n.ServiceProcessor.SendRaw(n.c.Roster.Get(w.SourceId), ack); err != nil {
+			log.Lvl1("Error sending ack")
+		}	
 	}
-
-
-	// re gossip
-
-	// start loop
-
-	//go n.roundLoop(1)
 }
 
 func (n *Node) roundLoop(round int) {
@@ -126,12 +154,19 @@ func (n *Node) roundLoop(round int) {
 
 func (n *Node) gossip(msg interface{}) {
 	for i := 0; i < n.c.GossipPeers; i++ {
-		rp := n.sessionStorage.SelectRandomPeer()
+		var rp *PeerInfo
+		if n.c.UseSmart {
+			rp = n.sessionStorage.SmartSelectRandomPeer()
+		} else {
+			rp = n.sessionStorage.SelectRandomPeer()
+		}		
+		/*
 		if !rp.Known {
 			rp.Delay = rand.Intn(n.c.MaxDelay - n.c.MinDelay) + n.c.MinDelay
 			n.sessionStorage.UpdatePeer(rp.Index, rp.Delay)
-		}
+		} */
 		go func() {
+			//log.Lvl1(rp.Delay)
 			time.Sleep(time.Duration(rp.Delay) * time.Millisecond)
 			if err := n.ServiceProcessor.SendRaw(rp.ServerIdentity, msg); err != nil {
 				log.Lvl1("Error sending message")
