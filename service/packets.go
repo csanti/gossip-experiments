@@ -12,6 +12,7 @@ func init() {
 
 type Whisper struct {
 	SourceId int // id of the node that generated the whisper
+	Round int
 	PeerId int // id of the node that gossiped the whisper
 	Blob []byte // data
 	Iteration int // increases everythime the mssage is regossiped

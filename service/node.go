@@ -18,13 +18,15 @@ type Node struct {
 	// current round number
 	round int
 	// done callback
-	callback func(int) // callsback number of finalized blocks
+	callback func() // callsback number of finalized blocks
 
 	sessionStorage *SessionStorage
 	isBlockProposer bool
 
 	broadcast CommunicationFn
 	gossipSubset CommunicationFn
+	gossiped map[int]bool
+	simulatedRoundsCount int
 }
 
 func NewNodeProcess(c *onet.Context, conf *Config, b CommunicationFn, g CommunicationFn) *Node {
@@ -36,25 +38,32 @@ func NewNodeProcess(c *onet.Context, conf *Config, b CommunicationFn, g Communic
     	broadcast: b,
     	gossipSubset: g,
     	sessionStorage: NewSessionStorage(conf),
+    	gossiped: make(map[int]bool),
 	}
 	n.sessionStorage.InitPeerList()
 	return n
 }
 
-func (n *Node) AttachCallback(fn func(int)) {
+func (n *Node) AttachCallback(fn func()) {
 	// usually only attached to one of the nodes to notify a higher layer of the progress
 	n.callback = fn
 }
 
 func (n *Node) Start() {
-	log.Lvl1("Staring gossiping!")
 	n.isBlockProposer = true
-	// create first whisper
-	packet := &Whisper{
+	go func() {
+		for i:=0;i<n.c.RoundsToSimulate;i++ {
+			log.Lvl1("Sending whisper ",i)
+			// create first whisper
+			packet := &Whisper{
+				Round: i,
+			}
+			// send bootstrap message to all nodes
+			go n.gossip(packet)
+			time.Sleep(time.Duration(n.c.RoundTime) * time.Millisecond)
+		}
+	}()
 
-	}
-	// send bootstrap message to all nodes
-	go n.gossip(packet)
 }
 
 func (n *Node) Process(e *network.Envelope) {
@@ -71,7 +80,18 @@ func (n *Node) Process(e *network.Envelope) {
 
 
 func (n *Node) ReceivedWhisper(w *Whisper) {
-	log.Lvl1("Processing whisper message...")
+	log.Lvl3("Processing whisper message...")
+	if !n.gossiped[w.Round] {
+		log.Lvl1(n.c.Index)
+		n.callback()
+		go n.gossip(w)
+		n.gossiped[w.Round] = true
+		if n.c.UseSmart {
+			time.Sleep(time.Duration(5)*time.Second)
+			n.sessionStorage.ComputeWeights()
+		}
+	}
+
 
 	// re gossip
 
@@ -86,7 +106,7 @@ func (n *Node) roundLoop(round int) {
 	defer func() {
 		log.Lvlf3("%d - Exiting round %d loop",n.c.Index,round)
 		if n.callback != nil {
-			n.callback(round)
+			n.callback()
 		}
 	}()
 	n.Cond.L.Lock()

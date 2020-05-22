@@ -16,6 +16,7 @@ type SessionStorage struct {
 	DelaySum int
 	WeightSum int
 	c *Config
+	WeightDivider int
 }
 
 type PeerInfo struct {
@@ -31,6 +32,7 @@ func NewSessionStorage(conf *Config) *SessionStorage {
 		Peers: make(map[int]*PeerInfo),
 		WeightSum: 10,
 		c: conf,
+		WeightDivider: 20,
 	}
 }
 
@@ -70,17 +72,29 @@ func (s *SessionStorage) UpdatePeer(id int, delay int) {
 }
 
 func (s *SessionStorage) ComputeWeights() {
-	s.WeightedList = make([]*PeerInfo, s.WeightSum)
+	//s.WeightedList = make([]*PeerInfo, s.WeightSum)
+	s.WeightedList = nil
 	var index int
 	for _ , p := range s.Peers {
-		p.Weight = int(float64(p.Delay) / float64(s.DelaySum) * float64(s.WeightSum))		
+		p.Weight = int((1.0 / (float64(p.Delay) / float64(s.DelaySum)))/ float64(s.WeightDivider)) 
+		//p.Weight = int(1.0 / (float64(p.Delay) / 100.0) * 10)
+		//p.Weight = int(float64(p.Delay) / float64(s.DelaySum) * float64(s.WeightSum))	
+		//log.Lvl1(p.Weight)
+		//log.Lvl1(s.DelaySum)
+		//log.Lvl1(s.WeightSum)
+		if(p.Weight > 0 ) {
+			//log.Lvlf1("Source: %d - Node: %d - Delay: %d - Weight: %d",s.c.Index, p.Index, p.Delay, p.Weight)
+		}
+		
 		for i := 0; i < p.Weight; i++ {
-			s.WeightedList[index] = p
+			//s.WeightedList[index] = p
+			s.WeightedList = append(s.WeightedList, p)
 			index++
 		}
 	}
-	log.Lvl1(s.Peers)
-	log.Lvl1(s.WeightedList)
+	//s.WeightDivider++
+	//log.Lvl1(s.Peers)
+	//log.Lvl1(s.WeightedList)
 
 }
 

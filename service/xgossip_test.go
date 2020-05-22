@@ -29,8 +29,17 @@ func TestXGossip(t *testing.T) {
 	test := onet.NewTCPTest(suite)
 	defer test.CloseAll()
 
-	n := 10
+	n := 20
 	servers, roster, _ := test.GenTree(n, true)
+
+	done := make(chan bool)
+	var count int = 0
+	cb := func() {
+		count++
+		if count >= n-1+1000 {
+			done <- true
+		}
+	}
 
 	gossipers := make([]*XGossip, n)
 	for i := 0; i < n; i++ {
@@ -40,28 +49,28 @@ func TestXGossip(t *testing.T) {
 			N: n,
 			CommunicationMode: 1,
 			GossipTime: 150,
-			GossipPeers: 3,
+			GossipPeers: 4,
 			BlockSize: 10000000,
 			MaxRoundLoops: 4,
-			RoundsToSimulate: 10,
+			RoundsToSimulate: 5,
+			RoundTime: 15000,
 			DefaultDelay: 1000,
 			MinDelay: 100,
 			MaxDelay: 600,
+			UseSmart: true,
 		}
 		gossipers[i] = servers[i].Service(Name).(*XGossip)
 		gossipers[i].SetConfig(c)
+		gossipers[i].AttachCallback(cb)
 	}
-	
-	done := make(chan bool)
-	cb := func(r int) {
-		if r > 10 {
-			done <- true
-		}
-	}
-	
-	gossipers[0].AttachCallback(cb)
+
 	time.Sleep(time.Duration(1)*time.Second)
 	go gossipers[0].Start()
-	<-done
+	select {
+	case <-done:
+	case <-time.After(1000 * time.Second):
+		log.Lvl1("timeout")
+	}
+	
 	log.Lvl1("Test finished.")
 }
