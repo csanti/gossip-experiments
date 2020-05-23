@@ -16,16 +16,12 @@ type Config struct {
 	Roster *onet.Roster // participants
 	Index  int          // index of the node receiving this config
 	N      int          // length of participants
-	GossipTime int
 	GossipPeers int 		// number of neighbours that each node will gossip messages to
-	BlockSize int             // the size of the block in bytes
 	CommunicationMode int  	// 0 for broadcast, 1 for gossip
-	MaxRoundLoops int // maximum times a node can loop on a round before alerting
 	RoundsToSimulate int
 	RoundTime int
 	MaxDelay int
 	MinDelay int
-	DefaultDelay int
 	UseSmart bool
 	MaxWeight int
 }

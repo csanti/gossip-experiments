@@ -70,7 +70,7 @@ func (n *Node) Start() {
 			go n.gossip(packet)
 			select {
 				case <-n.finishedRound:
-				case <-time.After(time.Duration(n.c.RoundTime) * time.Millisecond):
+				case <-time.After(time.Duration(n.c.RoundTime) * time.Second):
 					log.Lvl1("round timeout")
 			}
 			//n.finishedRound<-false

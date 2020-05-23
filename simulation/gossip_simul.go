@@ -20,16 +20,12 @@ func init() {
 // config being passed down to all nodes, each one takes the relevant
 // information
 type config struct {          // threshold of the threshold sharing scheme
-	BlockSize int             // the size of the block in bytes         // blocktime in seconds
-	GossipTime int
 	GossipPeers int 		// number of neighbours that each node will gossip messages to
 	CommunicationMode int  	// 0 for broadcast, 1 for gossip
-	MaxRoundLoops int // maximum times a node can loop on a round before alerting
 	RoundsToSimulate int
 	RoundTime int
 	MaxDelay int
 	MinDelay int
-	DefaultDelay int
 	UseSmart bool
 	MaxWeight int
 	LoadTime int
@@ -62,15 +58,11 @@ func (s *Simulation) DistributeConfig(config *onet.SimulationConfig) {
 			Index: i,
 			N: n,
 			CommunicationMode: s.CommunicationMode,
-			GossipTime: s.GossipTime,
 			GossipPeers: s.GossipPeers,
-			BlockSize: s.BlockSize,
-			MaxRoundLoops: s.MaxRoundLoops,
 			RoundsToSimulate: s.RoundsToSimulate,
 			RoundTime: s.RoundTime,
 			MaxDelay: s.MaxDelay,
 			MinDelay: s.MinDelay,
-			DefaultDelay: s.DefaultDelay,
 			UseSmart: s.UseSmart,
 			MaxWeight: s.MaxWeight,
 		}
