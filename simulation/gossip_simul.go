@@ -32,6 +32,8 @@ type config struct {          // threshold of the threshold sharing scheme
 	DefaultDelay int
 	UseSmart bool
 	MaxWeight int
+	LoadTime int
+	Timeout int
 }
 
 type Simulation struct {
@@ -83,18 +85,21 @@ func (s *Simulation) DistributeConfig(config *onet.SimulationConfig) {
 
 func (s *Simulation) Run(config *onet.SimulationConfig) error {
 
-	log.Lvl1("distributing config to all nodes...")
+	log.Lvl1("Distributing config to all nodes...")
 	s.DistributeConfig(config)
 	log.Lvl1("Sleeping for the config to dispatch correctly")
-	time.Sleep(3 * time.Second)
-	log.Lvl1("Starting nfinity simulation")
+	time.Sleep(time.Duration(s.LoadTime) * time.Second)
+	log.Lvl1("Starting xgossip simulation")
 	xgossip := config.GetService(xgossip.Name).(*xgossip.XGossip)
 
 
 	done := make(chan bool)
 
-	newRoundCb := func() {
+	newRoundCb := func(r int) {
 		//roundDone++
+		if r >= s.RoundsToSimulate-1 {
+			done<-true
+		}
 		
 		//log.Lvl1("Simulation round finished")
 	}
@@ -105,11 +110,12 @@ func (s *Simulation) Run(config *onet.SimulationConfig) error {
 
 	select {
 	case <-done:
-	case <-time.After(65 * time.Second):
+	case <-time.After(time.Duration(s.Timeout) * time.Second):
 		log.Lvl1("timeout")
 	}
 
 	log.Lvl1(" ---------------------------")
+	log.Lvl1(" SIMULATION FINISHED ")
 	log.Lvl1(" ---------------------------")
 	return nil
 }

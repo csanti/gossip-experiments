@@ -45,7 +45,7 @@ func (g *XGossip) SetConfig(c *Config) {
 	}	
 }
 
-func (g *XGossip) AttachCallback(fn func()) {
+func (g *XGossip) AttachCallback(fn func(int)) {
 	// attach to something.. haha lol xd
 	if g.node != nil {
 		g.node.AttachCallback(fn)	

@@ -18,7 +18,7 @@ type Node struct {
 	// current round number
 	round int
 	// done callback
-	callback func() // callsback number of finalized blocks
+	callback func(int) // callsback number of finalized blocks
 
 	sessionStorage *SessionStorage
 	isBlockProposer bool
@@ -47,7 +47,7 @@ func NewNodeProcess(c *onet.Context, conf *Config, b CommunicationFn, g Communic
 	return n
 }
 
-func (n *Node) AttachCallback(fn func()) {
+func (n *Node) AttachCallback(fn func(int)) {
 	// usually only attached to one of the nodes to notify a higher layer of the progress
 	n.callback = fn
 }
@@ -70,13 +70,15 @@ func (n *Node) Start() {
 			go n.gossip(packet)
 			select {
 				case <-n.finishedRound:
-				case <-time.After(15000 * time.Millisecond):
+				case <-time.After(time.Duration(n.c.RoundTime) * time.Millisecond):
 					log.Lvl1("round timeout")
 			}
 			//n.finishedRound<-false
-			log.Lvlf1("Round %d Finished - MaxDelay: %d - MaxIterations: %d",i,n.sessionStorage.MaxNodeDelay[i],n.sessionStorage.MaxNodeIterations[i])
+			log.Lvlf1("Round %d Finished - MaxDelay: %d - MaxIterations: %d - NodesReached: %d",i,n.sessionStorage.MaxNodeDelay[i],n.sessionStorage.MaxNodeIterations[i],n.sessionStorage.AckCount[i])
 			monitor.RecordSingleMeasure("maxDelay", float64(n.sessionStorage.MaxNodeDelay[i]))
 			monitor.RecordSingleMeasure("maxIterations", float64(n.sessionStorage.MaxNodeIterations[i]))
+			monitor.RecordSingleMeasure("reachedNodes", float64(n.sessionStorage.AckCount[i]))
+			n.callback(i)
 		}
 	}()
 
@@ -107,9 +109,6 @@ func (n *Node) ReceivedWhisper(w *Whisper) {
 	log.Lvl3("Processing whisper message...")
 	if !n.gossiped[w.Round] {
 		received := time.Now()
-		if n.callback != nil {
-			n.callback()
-		}
 		ack := &Ack {
 			Timestamp: received.Format("2006-01-02 15:04:05.000000000 -0700 MS"),
 			Round: w.Round,
@@ -128,6 +127,7 @@ func (n *Node) ReceivedWhisper(w *Whisper) {
 	}
 }
 
+/*
 func (n *Node) roundLoop(round int) {
 	log.Lvlf3("Starting round %d loop",round)
 	// 
@@ -151,6 +151,7 @@ func (n *Node) roundLoop(round int) {
 		times++
 	}
 }
+*/
 
 func (n *Node) gossip(msg interface{}) {
 	for i := 0; i < n.c.GossipPeers; i++ {
