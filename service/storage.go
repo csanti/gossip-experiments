@@ -46,6 +46,7 @@ func NewSessionStorage(conf *Config) *SessionStorage {
 }
 
 func (s *SessionStorage) InitPeerList() {
+	rand.Seed(time.Now().UTC().UnixNano()*int64(s.c.Index))
 	for i, p := range s.c.Roster.List {
 		s.Peers[i] = &PeerInfo {
 			Index: i,

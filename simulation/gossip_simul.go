@@ -84,7 +84,6 @@ func (s *Simulation) DistributeConfig(config *onet.SimulationConfig) {
 }
 
 func (s *Simulation) Run(config *onet.SimulationConfig) error {
-
 	log.Lvl1("Distributing config to all nodes...")
 	s.DistributeConfig(config)
 	log.Lvl1("Sleeping for the config to dispatch correctly")
