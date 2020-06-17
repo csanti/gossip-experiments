@@ -31,6 +31,7 @@ func NewXGossipService(c *onet.Context) (onet.Service, error) {
 	c.RegisterProcessor(g, WhisperType)
 	c.RegisterProcessor(g, ConfigType)
 	c.RegisterProcessor(g, AckType)
+	c.RegisterProcessor(g, IdaWhisperType)
 	return g, nil
 }
 
@@ -69,6 +70,8 @@ func (g *XGossip) Process(e *network.Envelope) {
 	case *Config:
 		g.SetConfig(inner)
 	case *Whisper:
+		g.node.Process(e)
+	case *IdaWhisper:
 		g.node.Process(e)
 	case *Ack:
 		g.node.Process(e)

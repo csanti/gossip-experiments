@@ -22,10 +22,13 @@ type Node struct {
 
 	sessionStorage *SessionStorage
 	isBlockProposer bool
+	idaGossipEnabled bool
 
 	broadcast CommunicationFn
 	gossipSubset CommunicationFn
 	gossiped map[int]bool
+	gossipedSegments map[int][int]bool
+	segmentsRcv map[int]int
 	simulatedRoundsCount int
 
 	finishedRound chan bool
@@ -41,7 +44,10 @@ func NewNodeProcess(c *onet.Context, conf *Config, b CommunicationFn, g Communic
     	gossipSubset: g,
     	sessionStorage: NewSessionStorage(conf),
     	gossiped: make(map[int]bool),
+    	gossipedSegments: make(map[int][int]bool),
+    	segmentsRcv: make(map[int]int),
     	finishedRound: make(chan bool),
+    	idaGossipEnabled: false,
 	}
 	n.sessionStorage.InitPeerList()
 	return n
@@ -58,16 +64,24 @@ func (n *Node) Start() {
 	go func() {
 		for i:=0;i<n.c.RoundsToSimulate;i++ {
 			log.Lvl1("Sending whisper ",i)
-			// create first whisper
-			packet := &Whisper{
-				SourceId: n.c.Index,
-				Round: i,
-				PeerId: n.c.Index,
-				Iteration: 1,
-			}
+
 			// send bootstrap message to all nodes
 			n.sessionStorage.SetInitialTimestamp(i, time.Now())
-			go n.gossip(packet)
+
+			if n.idaGossipEnabled {
+				go n.idaGossip(packet)
+			} else {
+				// create first whisper
+				packet := &Whisper{
+					SourceId: n.c.Index,
+					Round: i,
+					PeerId: n.c.Index,
+					Iteration: 1,
+					SegmentId: 1,
+				}
+				go n.gossip(packet)
+			}
+			
 			select {
 				case <-n.finishedRound:
 				case <-time.After(time.Duration(n.c.RoundTime) * time.Second):
@@ -107,6 +121,7 @@ func (n *Node) ReceivedAck(a *Ack) {
 
 func (n *Node) ReceivedWhisper(w *Whisper) {
 	log.Lvl3("Processing whisper message...")
+
 	if !n.gossiped[w.Round] {
 		received := time.Now()
 		ack := &Ack {
@@ -124,6 +139,22 @@ func (n *Node) ReceivedWhisper(w *Whisper) {
 		if err := n.ServiceProcessor.SendRaw(n.c.Roster.Get(w.SourceId), ack); err != nil {
 			log.Lvl1("Error sending ack")
 		}	
+	}
+}
+
+func (n *Node) ReceivedIdaWhisper(w *IdaWhisper) {
+	log.Lvl3("Processing whisper message...")
+
+	if !n.gossipedSegments[w.Round][w.SegmentId] {
+		n.segmentsRcv[w.Round]++
+		n.gossipedSegments[w.Round][w.SegmentId] = true
+
+		// re gossip segment
+		
+	}
+
+	if n.segmentsRcv[w.Roung] >= 3 { //change
+		// we have enough segments
 	}
 }
 
@@ -168,6 +199,30 @@ func (n *Node) gossip(msg interface{}) {
 		} */
 		go func() {
 			//log.Lvl1(rp.Delay)
+			time.Sleep(time.Duration(rp.Delay) * time.Millisecond)
+			if err := n.ServiceProcessor.SendRaw(rp.ServerIdentity, msg); err != nil {
+				log.Lvl1("Error sending message")
+			}		
+		}()
+	}
+}
+
+func (n *Node) idaGossip(msg interface{}) {
+	for i := 0; i < n.c.GossipPeers; i++ {
+		var rp *PeerInfo
+		if n.c.UseSmart {
+			rp = n.sessionStorage.SmartSelectRandomPeer()
+		} else {
+			rp = n.sessionStorage.SelectRandomPeer()
+		}		
+
+		msg.SegmentId = i	
+
+		go func() {
+			//log.Lvl1(rp.Delay)
+
+			// reduce the dalay
+
 			time.Sleep(time.Duration(rp.Delay) * time.Millisecond)
 			if err := n.ServiceProcessor.SendRaw(rp.ServerIdentity, msg); err != nil {
 				log.Lvl1("Error sending message")
