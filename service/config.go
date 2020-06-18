@@ -24,4 +24,5 @@ type Config struct {
 	MinDelay int
 	UseSmart bool
 	MaxWeight int
+	IdaGossipEnabled bool
 }

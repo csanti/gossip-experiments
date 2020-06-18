@@ -29,16 +29,18 @@ func TestXGossip(t *testing.T) {
 	test := onet.NewTCPTest(suite)
 	defer test.CloseAll()
 
-	n := 20
+	n := 8
 	servers, roster, _ := test.GenTree(n, true)
 
 	done := make(chan bool)
-	var count int = 0
-	cb := func() {
-		count++
-		if count >= n-1+1000 {
-			done <- true
+
+	newRoundCb := func(r int) {
+		//roundDone++
+		if r >= 4 {
+			done<-true
 		}
+		
+		//log.Lvl1("Simulation round finished")
 	}
 
 	gossipers := make([]*XGossip, n)
@@ -48,18 +50,18 @@ func TestXGossip(t *testing.T) {
 			Index: i,
 			N: n,
 			CommunicationMode: 1,
-			GossipPeers: 4,
-			BlockSize: 10000000,
+			GossipPeers: 3,
 			RoundsToSimulate: 5,
-			RoundTime: 15000,
-			MinDelay: 100,
-			MaxDelay: 600,
+			RoundTime: 25,
+			MinDelay: 2000,
+			MaxDelay: 4000,
 			UseSmart: true,
 			MaxWeight: 100,
+			IdaGossipEnabled: true,
 		}
 		gossipers[i] = servers[i].Service(Name).(*XGossip)
 		gossipers[i].SetConfig(c)
-		gossipers[i].AttachCallback(cb)
+		gossipers[i].AttachCallback(newRoundCb)
 	}
 
 	time.Sleep(time.Duration(1)*time.Second)

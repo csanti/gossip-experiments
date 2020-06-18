@@ -32,6 +32,18 @@ type PeerInfo struct {
 	Known bool
 }
 
+type IdaRound struct {
+	GossipedSegments map[int]bool
+	SegmentsRcv int
+}
+
+func NewIdaRound() *IdaRound {
+	return &IdaRound {
+		GossipedSegments: make(map[int]bool),
+		SegmentsRcv: 0,
+	}
+}
+
 func NewSessionStorage(conf *Config) *SessionStorage {
 	return &SessionStorage {
 		Peers: make(map[int]*PeerInfo),

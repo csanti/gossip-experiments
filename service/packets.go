@@ -11,7 +11,7 @@ var IdaWhisperType network.MessageTypeID
 func init() {
 	WhisperType = network.RegisterMessage(&Whisper{})
 	AckType = network.RegisterMessage(&Ack{})
-	IdaWhisperType network.RegisterMessage(&IdaWhisper{})
+	IdaWhisperType = network.RegisterMessage(&IdaWhisper{})
 }
 
 type Whisper struct {

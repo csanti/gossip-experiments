@@ -26,10 +26,10 @@ type Node struct {
 
 	broadcast CommunicationFn
 	gossipSubset CommunicationFn
-	gossiped map[int]bool
-	gossipedSegments map[int][int]bool
-	segmentsRcv map[int]int
 	simulatedRoundsCount int
+	gossiped map[int]bool
+
+	idaRounds map[int]*IdaRound
 
 	finishedRound chan bool
 }
@@ -44,10 +44,8 @@ func NewNodeProcess(c *onet.Context, conf *Config, b CommunicationFn, g Communic
     	gossipSubset: g,
     	sessionStorage: NewSessionStorage(conf),
     	gossiped: make(map[int]bool),
-    	gossipedSegments: make(map[int][int]bool),
-    	segmentsRcv: make(map[int]int),
     	finishedRound: make(chan bool),
-    	idaGossipEnabled: false,
+    	idaRounds: make(map[int]*IdaRound),
 	}
 	n.sessionStorage.InitPeerList()
 	return n
@@ -60,7 +58,6 @@ func (n *Node) AttachCallback(fn func(int)) {
 
 func (n *Node) Start() {
 	n.isBlockProposer = true
-	log.Lvl1(n.c.RoundsToSimulate)
 	go func() {
 		for i:=0;i<n.c.RoundsToSimulate;i++ {
 			log.Lvl1("Sending whisper ",i)
@@ -68,8 +65,9 @@ func (n *Node) Start() {
 			// send bootstrap message to all nodes
 			n.sessionStorage.SetInitialTimestamp(i, time.Now())
 
-			if n.idaGossipEnabled {
-				go n.idaGossip(packet)
+			if n.c.IdaGossipEnabled {
+
+				go n.idaGossip(n.c.Index, i)
 			} else {
 				// create first whisper
 				packet := &Whisper{
@@ -77,8 +75,9 @@ func (n *Node) Start() {
 					Round: i,
 					PeerId: n.c.Index,
 					Iteration: 1,
-					SegmentId: 1,
 				}
+				n.round = i
+				n.idaRounds[n.round] = NewIdaRound()
 				go n.gossip(packet)
 			}
 			
@@ -105,6 +104,8 @@ func (n *Node) Process(e *network.Envelope) {
 	switch inner := e.Msg.(type) {
 		case *Whisper:
 			n.ReceivedWhisper(inner)
+		case *IdaWhisper:
+			n.ReceivedIdaWhisper(inner)
 		case *Ack:
 			n.ReceivedAck(inner)
 		default:
@@ -121,6 +122,14 @@ func (n *Node) ReceivedAck(a *Ack) {
 
 func (n *Node) ReceivedWhisper(w *Whisper) {
 	log.Lvl3("Processing whisper message...")
+	if w.Round < n.round {
+		// all nodes already finished, we dont need to keep gossiping
+		return
+	}
+	if w.Round > n.round {
+		n.round = w.Round
+	}
+
 
 	if !n.gossiped[w.Round] {
 		received := time.Now()
@@ -143,19 +152,47 @@ func (n *Node) ReceivedWhisper(w *Whisper) {
 }
 
 func (n *Node) ReceivedIdaWhisper(w *IdaWhisper) {
-	log.Lvl3("Processing whisper message...")
+	//log.Lvl1("Processing ida whisper message... ", w.SegmentId, w.Round)
+	if w.Round < n.round {
+		// all nodes already finished, we dont need to keep gossiping
+		return
+	}
+	if w.Round > n.round {
+		n.round = w.Round
+	}
 
-	if !n.gossipedSegments[w.Round][w.SegmentId] {
-		n.segmentsRcv[w.Round]++
-		n.gossipedSegments[w.Round][w.SegmentId] = true
+	_, exists := n.idaRounds[w.Round]
+	if !exists {
+		n.idaRounds[w.Round] = NewIdaRound()
+	}
+	idaRound := n.idaRounds[w.Round]
+	if !idaRound.GossipedSegments[w.SegmentId] {
+		log.Lvl1("new segment ", n.round)
+		idaRound.SegmentsRcv++
+		idaRound.GossipedSegments[w.SegmentId] = true
 
 		// re gossip segment
-		
+		w.PeerId = n.c.Index
+		w.Iteration = w.Iteration + 1
+		go n.gossip(w)
+
+		if idaRound.SegmentsRcv >= 3 { //change
+			// we have enough segments
+			log.Lvl1("Received enough segments! ", n.round)
+			received := time.Now()
+			ack := &Ack {
+				Timestamp: received.Format("2006-01-02 15:04:05.000000000 -0700 MS"),
+				Round: w.Round,
+				PeerId: n.c.Index,
+				MaxIteration: w.Iteration,
+			}
+			if err := n.ServiceProcessor.SendRaw(n.c.Roster.Get(w.SourceId), ack); err != nil {
+				log.Lvl1("Error sending ack")
+			}
+		}
 	}
 
-	if n.segmentsRcv[w.Roung] >= 3 { //change
-		// we have enough segments
-	}
+
 }
 
 /*
@@ -207,26 +244,32 @@ func (n *Node) gossip(msg interface{}) {
 	}
 }
 
-func (n *Node) idaGossip(msg interface{}) {
+func (n *Node) idaGossip(index int, round int) {
 	for i := 0; i < n.c.GossipPeers; i++ {
 		var rp *PeerInfo
 		if n.c.UseSmart {
 			rp = n.sessionStorage.SmartSelectRandomPeer()
 		} else {
 			rp = n.sessionStorage.SelectRandomPeer()
-		}		
+		}
 
-		msg.SegmentId = i	
-
-		go func() {
+		idaWhisper := func(sId int, peer *PeerInfo) {
+			packet := &IdaWhisper {
+				SourceId: index,
+				Round: round,
+				PeerId: index,
+				Iteration: 1,
+				SegmentId: sId,
+			}
 			//log.Lvl1(rp.Delay)
 
 			// reduce the dalay
-
-			time.Sleep(time.Duration(rp.Delay) * time.Millisecond)
-			if err := n.ServiceProcessor.SendRaw(rp.ServerIdentity, msg); err != nil {
+			log.Lvlf1("%s - %d",peer.ServerIdentity, packet.SegmentId)
+			time.Sleep(time.Duration(peer.Delay) * time.Millisecond)
+			if err := n.ServiceProcessor.SendRaw(peer.ServerIdentity, packet); err != nil {
 				log.Lvl1("Error sending message")
-			}		
-		}()
+			}	
+		}
+		go idaWhisper(i, rp)
 	}
 }
