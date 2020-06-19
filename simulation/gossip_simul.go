@@ -30,6 +30,7 @@ type config struct {          // threshold of the threshold sharing scheme
 	MaxWeight int
 	LoadTime int
 	Timeout int
+	IdaGossipEnabled bool
 }
 
 type Simulation struct {
@@ -65,6 +66,8 @@ func (s *Simulation) DistributeConfig(config *onet.SimulationConfig) {
 			MinDelay: s.MinDelay,
 			UseSmart: s.UseSmart,
 			MaxWeight: s.MaxWeight,
+			IdaGossipEnabled: s.IdaGossipEnabled,
+			MonitoringEnabled: true,
 		}
 		if i == 0 {
 			config.GetService(xgossip.Name).(*xgossip.XGossip).SetConfig(c)
@@ -104,7 +107,7 @@ func (s *Simulation) Run(config *onet.SimulationConfig) error {
 	case <-time.After(time.Duration(s.Timeout) * time.Second):
 		log.Lvl1("timeout")
 	}
-
+	time.Sleep(time.Duration(15)*time.Second)
 	log.Lvl1(" ---------------------------")
 	log.Lvl1(" SIMULATION FINISHED ")
 	log.Lvl1(" ---------------------------")

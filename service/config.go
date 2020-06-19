@@ -25,4 +25,5 @@ type Config struct {
 	UseSmart bool
 	MaxWeight int
 	IdaGossipEnabled bool
+	MonitoringEnabled bool
 }
