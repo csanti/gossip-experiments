@@ -183,7 +183,7 @@ func (n *Node) ReceivedIdaWhisper(w *IdaWhisper) {
 
 		if idaRound.SegmentsRcv >= n.c.GossipPeers - 2 { 
 			// we have enough segments
-			log.Lvlf1("Node %d - Round %d - Received enough segments! ", n.c.Index, n.round)
+			//log.Lvlf1("Node %d - Round %d - Received enough segments! ", n.c.Index, n.round)
 			received := time.Now()
 			ack := &Ack {
 				Timestamp: received.Format("2006-01-02 15:04:05.000000000 -0700 MS"),
